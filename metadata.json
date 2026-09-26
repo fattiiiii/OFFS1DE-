@@ -1,0 +1,6 @@
+{
+  "name": "OFFSIDE - Streetwear Archive",
+  "description": "Curated retro grails, oversized silhouettes & bespoke archive sports jerseys engineered for modern streetwear with direct WhatsApp concierge.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

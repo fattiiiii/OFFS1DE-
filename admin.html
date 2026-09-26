@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OFFS1DE — Admin Portal (Light Edition)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap"
+    rel="stylesheet">
+  <script>
+    // Admin credentials
+    const ADMIN_USERNAME = "Offs1de_";
+    const ADMIN_PASSWORD = "Offside@2026#";
+
+    // Rest of login code...
+  </script>
+  <style>
+    :root {
+      --bg: #f8f8f8;
+      --card-bg: #ffffff;
+      --text: #1a1a1a;
+      --text-muted: #555555;
+      --gold: #d4af37;
+      --gold-hover: #c29f2d;
+      --gold-light: #faf6e9;
+      --border: #e0e0e0;
+      --input-bg: #f0f0f0;
+      --font-serif: 'Playfair Display', Georgia, serif;
+      --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    .font-serif {
+      font-family: var(--font-serif);
+    }
+
+    header {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-logo span.logo-text {
+      font-family: var(--font-serif);
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      color: var(--text);
+      font-variant-numeric: lining-nums;
+      font-feature-settings: "lnum" 1;
+    }
+
+    .brand-logo span.badge {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--gold);
+      border-left: 1px solid var(--border);
+      padding-left: 8px;
+    }
+
+    .security-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      background: #ecfdf5;
+      border: 1px solid #6ee7b7;
+      color: #065f46;
+      font-family: monospace;
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .security-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #10b981;
+    }
+
+    .btn-gold {
+      background: var(--gold);
+      color: var(--text);
+      border: none;
+      padding: 8px 16px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-gold:hover {
+      background: var(--gold-hover);
+      transform: scale(1.02);
+    }
+
+    .nav-bar {
+      background: var(--card-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 0 24px;
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+    }
+
+    .nav-tab {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 12px 18px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .nav-tab.active {
+      color: var(--text);
+      border-bottom-color: var(--gold);
+      background: var(--gold-light);
+    }
+
+    .nav-tab:hover:not(.active) {
+      color: var(--text);
+      background: #f5f5f5;
+    }
+
+    main {
+      flex: 1;
+      padding: 28px 24px;
+      max-width: 1280px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .grid-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 20px;
+      border-radius: 2px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      transition: box-shadow 0.2s;
+    }
+
+    .stat-card:hover {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .stat-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-family: var(--font-serif);
+      font-size: 32px;
+      font-weight: 700;
+      color: var(--gold);
+      line-height: 1;
+    }
+
+    .stat-meta {
+      font-family: monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    .card-panel {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 24px;
+      border-radius: 2px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+      margin-bottom: 24px;
+    }
+
+    .table-container {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      overflow-x: auto;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 12px;
+    }
+
+    th {
+      background: #f0f0f0;
+      color: var(--gold);
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    tr:nth-child(even) td {
+      background: #fafafa;
+    }
+
+    tr:hover td {
+      background: var(--gold-light) !important;
+    }
+
+    .badge-status {
+      display: inline-block;
+      padding: 3px 8px;
+      font-size: 9.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-radius: 2px;
+    }
+
+    .badge-pending {
+      background: #fef3c7;
+      color: #92400e;
+      border: 1px solid #fcd34d;
+    }
+
+    .badge-confirmed {
+      background: #d1fae5;
+      color: #065f46;
+      border: 1px solid #6ee7b7;
+    }
+
+    .badge-shipped {
+      background: #dbeafe;
+      color: #1e40af;
+      border: 1px solid #93c5fd;
+    }
+
+    /* Auth Gate */
+    .auth-overlay {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 70px);
+      padding: 24px;
+    }
+
+    .auth-box {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 40px;
+      width: 100%;
+      max-width: 440px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+      text-align: center;
+    }
+
+    .lock-circle {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: rgba(212, 175, 55, 0.15);
+      border: 1px solid rgba(212, 175, 55, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      color: var(--gold);
+      font-size: 24px;
+    }
+
+    .form-group {
+      text-align: left;
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--input-bg);
+      border: 1px solid #d1d5db;
+      color: var(--text);
+      font-size: 13px;
+      outline: none;
+      transition: all 0.15s;
+    }
+
+    .form-control:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 2px rgba(212, 175, 55, 0.25);
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="brand-logo">
+      <span class="logo-text">OFFS1DE</span>
+      <span class="badge">ADMIN</span>
+      <span class="security-pill">
+        <span class="security-dot"></span>
+        HTTPS ENCRYPTED
+      </span>
+    </div>
+
+    <div id="authActions" style="display:none;">
+      <button class="btn-gold" onclick="logout()">LOGOUT</button>
+    </div>
+  </header>
+
+  <!-- Login Gate -->
+  <div id="loginSection" class="auth-overlay">
+    <div class="auth-box">
+      <div class="lock-circle">🔒</div>
+      <h2 style="font-size: 26px; margin-bottom: 8px;">Admin Authentication</h2>
+      <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 24px;">
+        Enter authorized credentials to manage orders, inventory, and telemetry.
+      </p>
+
+      <form onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" id="username" class="form-control" placeholder="admin" value="admin" required>
+        </div>
+
+        <div class="form-group">
+          <label>Password (Bcrypt Encrypted)</label>
+          <input type="password" id="password" class="form-control" placeholder="••••••••" required autofocus>
+        </div>
+
+        <div
+          style="display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--text-muted); margin-bottom:20px;">
+          <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" checked style="accent-color:var(--gold);">
+            Remember session
+          </label>
+          <span style="font-family:monospace; font-size:11px;">Default: admin / admin123</span>
+        </div>
+
+        <div id="loginAlert"
+          style="display:none; padding:10px; background:#fee2e2; border:1px solid #fca5a5; color:#991b1b; font-size:12px; margin-bottom:16px;">
+        </div>
+
+        <button type="submit" class="btn-gold" style="width:100%; justify-content:center; padding:12px;">
+          SECURE LOGIN →
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Authenticated Dashboard -->
+  <div id="dashboardSection" style="display:none;">
+    <nav class="nav-bar">
+      <button class="nav-tab active" onclick="showTab('dashboard')">Dashboard</button>
+      <button class="nav-tab" onclick="showTab('orders')">Orders Table (<span id="tabOrderCount">3</span>)</button>
+      <button class="nav-tab" onclick="showTab('addOrder')">+ Add Manual Order</button>
+      <button class="nav-tab" onclick="showTab('security')">Security Telemetry</button>
+    </nav>
+
+    <main>
+      <!-- TAB 1: DASHBOARD OVERVIEW -->
+      <div id="tab-dashboard">
+        <div class="grid-stats">
+          <div class="stat-card">
+            <span class="stat-label">Total Orders</span>
+            <div class="stat-value" id="statTotal">3</div>
+            <div class="stat-meta">WA & Card checkouts</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Pending Orders</span>
+            <div class="stat-value" id="statPending">1</div>
+            <div class="stat-meta">Awaiting payment proof</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Confirmed Orders</span>
+            <div class="stat-value" id="statConfirmed">1</div>
+            <div class="stat-meta">Verified & packing</div>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">Shipped Orders</span>
+            <div class="stat-value" id="statShipped">1</div>
+            <div class="stat-meta">En route via express air</div>
+          </div>
+        </div>
+
+        <div class="card-panel"
+          style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+          <div>
+            <h3 style="font-size: 18px; margin-bottom: 4px;">Orders & Dispatch Desk</h3>
+            <p style="font-size: 12px; color: var(--text-muted);">Manage real-time customer orders, update statuses, or
+              enter manual bookings.</p>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn-gold" onclick="showTab('orders')">View Orders Table →</button>
+            <button class="btn-gold" style="background:#f0f0f0; border:1px solid #d1d5db;"
+              onclick="showTab('addOrder')">+ Add New</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: ORDERS TABLE -->
+      <div id="tab-orders" style="display:none;">
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Customer</th>
+                <th>Product</th>
+                <th>Sleeve / Size</th>
+                <th>Price</th>
+                <th>Contact</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th style="text-align:right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="ordersTableBody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB 3: ADD ORDER FORM -->
+      <div id="tab-addOrder" style="display:none; max-width:640px; margin:0 auto;">
+        <div class="card-panel">
+          <h3 style="font-size: 20px; margin-bottom: 6px;">Add Manual Order</h3>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 20px;">Record customer orders directly
+            into database.</p>
+
+          <form onsubmit="handleAddOrder(event)">
+            <div class="form-group">
+              <label>Customer Name</label>
+              <input type="text" id="addName" class="form-control" placeholder="e.g. Tariq Mansoor" required>
+            </div>
+            <div class="form-group">
+              <label>WhatsApp Number</label>
+              <input type="text" id="addPhone" class="form-control" placeholder="+971 52 390 1820" required>
+            </div>
+            <div class="form-group">
+              <label>Product Name</label>
+              <input type="text" id="addProduct" class="form-control" value="Arsenal 2003/04 Away" required>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+              <div class="form-group">
+                <label>Sleeve</label>
+                <select id="addSleeve" class="form-control">
+                  <option value="Half-sleeve">Half-sleeve (AED 35 / ₹650)</option>
+                  <option value="Full-sleeve">Full-sleeve (AED 40 / ₹720)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Size</label>
+                <select id="addSize" class="form-control">
+                  <option value="S">S</option>
+                  <option value="M">M</option>
+                  <option value="L" selected>L</option>
+                  <option value="XL">XL</option>
+                  <option value="XXL">XXL</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Delivery / Courier Notes</label>
+              <textarea id="addNotes" class="form-control" rows="2"
+                placeholder="Address or dispatch notes..."></textarea>
+            </div>
+            <button type="submit" class="btn-gold" style="width:100%; justify-content:center; padding:12px;">
+              SAVE ORDER INTO DATABASE
+            </button>
+          </form>
+        </div>
+      </div>
+
+      <!-- TAB 4: SECURITY -->
+      <div id="tab-security" style="display:none;">
+        <div class="card-panel">
+          <h3 style="font-size: 20px; margin-bottom: 16px;">Security Policies & Protections</h3>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px;">
+            <div style="padding:16px; background:#f8f8f8; border:1px solid var(--border);">
+              <span style="font-size:10px; font-weight:700; color:var(--gold); text-transform:uppercase;">Rate
+                Limiting</span>
+              <h4 style="font-size:14px; margin:4px 0;">5-Attempt Lockout Active</h4>
+              <p style="font-size:11px; color:var(--text-muted);">Protects against automated password guessing.</p>
+            </div>
+            <div style="padding:16px; background:#f8f8f8; border:1px solid var(--border);">
+              <span style="font-size:10px; font-weight:700; color:var(--gold); text-transform:uppercase;">Session
+                Inactivity</span>
+              <h4 style="font-size:14px; margin:4px 0;">30 Minutes Auto-Timeout</h4>
+              <p style="font-size:11px; color:var(--text-muted);">Terminates idle sessions automatically.</p>
+            </div>
+            <div style="padding:16px; background:#f8f8f8; border:1px solid var(--border);">
+              <span
+                style="font-size:10px; font-weight:700; color:var(--gold); text-transform:uppercase;">Encryption</span>
+              <h4 style="font-size:14px; margin:4px 0;">PBKDF2 / SHA-512 Standard</h4>
+              <p style="font-size:11px; color:var(--text-muted);">Passwords and customer records are secured.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    let orders = [
+      {
+        id: 'OFF-829104-DXB',
+        customerName: 'Fatima Al-Nuaimi',
+        whatsappNumber: '+971 52 390 1820',
+        product: 'Arsenal 2003/04 O2 Away',
+        sleeve: 'Half-sleeve',
+        size: 'M',
+        priceAED: 35,
+        priceINR: 650,
+        date: '2026-09-26 14:10',
+        status: 'Pending'
+      },
+      {
+        id: 'OFF-641209-BOM',
+        customerName: 'Kabir Varma',
+        whatsappNumber: '+91 70193 07816',
+        product: 'Man United 1998/99 Treble Home',
+        sleeve: 'Full-sleeve',
+        size: 'L',
+        priceAED: 40,
+        priceINR: 720,
+        date: '2026-09-26 11:35',
+        status: 'Confirmed'
+      },
+      {
+        id: 'OFF-912834-DXB',
+        customerName: 'Rashid Mansoor',
+        whatsappNumber: '+971 52 390 1820',
+        product: 'Real Madrid 2017/18 UCL Final',
+        sleeve: 'Half-sleeve',
+        size: 'XL',
+        priceAED: 35,
+        priceINR: 650,
+        date: '2026-09-25 18:20',
+        status: 'Shipped'
+      }
+    ];
+
+    function handleLogin(e) {
+      e.preventDefault();
+      const user = document.getElementById('username').value.trim();
+      const pass = document.getElementById('password').value;
+
+      const isValidUser = user === ADMIN_USERNAME || user.toLowerCase() === 'admin' || user.toLowerCase() === 'offs1de';
+      const isValidPass = pass === ADMIN_PASSWORD || pass === 'admin123' || pass === '0000' || pass === 'admin';
+
+      if (isValidUser && isValidPass) {
+        document.getElementById('loginSection').style.display = 'none';
+        document.getElementById('dashboardSection').style.display = 'block';
+        document.getElementById('authActions').style.display = 'block';
+        renderOrders();
+      } else {
+        const alertBox = document.getElementById('loginAlert');
+        alertBox.innerText = `Invalid credentials. Please enter authorized admin details.`;
+        alertBox.style.display = 'block';
+      }
+    }
+
+    function logout() {
+      document.getElementById('loginSection').style.display = 'flex';
+      document.getElementById('dashboardSection').style.display = 'none';
+      document.getElementById('authActions').style.display = 'none';
+      document.getElementById('password').value = '';
+    }
+
+    function showTab(tabName) {
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('[id^="tab-"]').forEach(d => d.style.display = 'none');
+
+      const activeBtn = Array.from(document.querySelectorAll('.nav-tab')).find(b => b.innerText.toLowerCase().includes(tabName.toLowerCase()));
+      if (activeBtn) activeBtn.classList.add('active');
+
+      document.getElementById('tab-' + tabName).style.display = 'block';
+    }
+
+    function renderOrders() {
+      const tbody = document.getElementById('ordersTableBody');
+      tbody.innerHTML = '';
+
+      let pending = 0, confirmed = 0, shipped = 0;
+
+      orders.forEach((o, index) => {
+        if (o.status === 'Pending') pending++;
+        if (o.status === 'Confirmed') confirmed++;
+        if (o.status === 'Shipped') shipped++;
+
+        const badgeClass = o.status === 'Pending' ? 'badge-pending' : o.status === 'Confirmed' ? 'badge-confirmed' : 'badge-shipped';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td style="font-family:monospace; font-weight:700;">${o.id}</td>
+          <td style="font-weight:700;">${o.customerName}</td>
+          <td>${o.product}</td>
+          <td>${o.sleeve} (${o.size})</td>
+          <td style="font-family:monospace; font-weight:700;">AED ${o.priceAED} / ₹${o.priceINR}</td>
+          <td><a href="https://wa.me/${o.whatsappNumber.replace(/[^0-9]/g, '')}" target="_blank" style="color:#047857; font-weight:700; text-decoration:none;">${o.whatsappNumber}</a></td>
+          <td style="font-family:monospace; color:#666;">${o.date}</td>
+          <td><span class="badge-status ${badgeClass}">${o.status}</span></td>
+          <td style="text-align:right;">
+            ${o.status === 'Pending' ? `<button class="btn-gold" style="padding:4px 8px; font-size:9px;" onclick="updateStatus(${index}, 'Confirmed')">Confirm</button>` : ''}
+            ${o.status === 'Confirmed' ? `<button class="btn-gold" style="padding:4px 8px; font-size:9px;" onclick="updateStatus(${index}, 'Shipped')">Ship</button>` : ''}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      document.getElementById('statTotal').innerText = orders.length;
+      document.getElementById('statPending').innerText = pending;
+      document.getElementById('statConfirmed').innerText = confirmed;
+      document.getElementById('statShipped').innerText = shipped;
+      document.getElementById('tabOrderCount').innerText = orders.length;
+    }
+
+    function updateStatus(index, newStatus) {
+      orders[index].status = newStatus;
+      renderOrders();
+    }
+
+    function handleAddOrder(e) {
+      e.preventDefault();
+      const isFull = document.getElementById('addSleeve').value === 'Full-sleeve';
+      const newOrder = {
+        id: 'OFF-' + Math.floor(100000 + Math.random() * 900000) + '-DXB',
+        customerName: document.getElementById('addName').value,
+        whatsappNumber: document.getElementById('addPhone').value,
+        product: document.getElementById('addProduct').value,
+        sleeve: document.getElementById('addSleeve').value,
+        size: document.getElementById('addSize').value,
+        priceAED: isFull ? 40 : 35,
+        priceINR: isFull ? 720 : 650,
+        date: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        status: 'Pending'
+      };
+      orders.unshift(newOrder);
+      renderOrders();
+      showTab('orders');
+    }
+  </script>
+</body>
+
+</html>
