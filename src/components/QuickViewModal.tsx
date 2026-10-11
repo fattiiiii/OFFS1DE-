@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Heart, ShieldCheck, Sparkles, MessageCircle, ShoppingBag } from 'lucide-react';
-import { Product, Currency, SleeveOption, JerseySize, getLockedPrice } from '../types';
+import { Product, Currency, SleeveOption, JerseySize, getLockedPrice, getProductPrimaryImage, getProductSecondaryImage } from '../types';
 
 interface QuickViewModalProps {
   product: Product | null;
@@ -23,9 +23,12 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
 }) => {
   if (!product) return null;
 
-  const [selectedSleeve, setSelectedSleeve] = useState<SleeveOption>(product.defaultSleeve);
-  const [selectedSize, setSelectedSize] = useState<JerseySize>(product.defaultSize);
-  const [activeImg, setActiveImg] = useState<string>(product.imageUrl);
+  const primaryImg = getProductPrimaryImage(product);
+  const secondaryImg = getProductSecondaryImage(product);
+
+  const [selectedSleeve, setSelectedSleeve] = useState<SleeveOption>(product.defaultSleeve || 'Half-sleeve');
+  const [selectedSize, setSelectedSize] = useState<JerseySize>(product.defaultSize || 'L');
+  const [activeImg, setActiveImg] = useState<string>(primaryImg);
 
   const sizes: JerseySize[] = ['S', 'M', 'L', 'XL', 'XXL'];
   const lockedPrice = getLockedPrice(selectedSleeve);
@@ -51,31 +54,33 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
             />
 
             {/* Status Badge */}
-            <div className="absolute top-3 left-3">
-              <span className="bg-[#111215] text-white text-[10px] font-bold tracking-[0.16em] uppercase px-2.5 py-1">
-                {product.badge}
-              </span>
-            </div>
+            {product.badge && (
+              <div className="absolute top-3 left-3">
+                <span className="bg-[#111215] text-white text-[10px] font-bold tracking-[0.16em] uppercase px-2.5 py-1">
+                  {product.badge}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Thumbnail row if secondary image exists */}
-          {product.secondaryImage && (
+          {secondaryImg && (
             <div className="flex gap-2 mt-3">
               <button
-                onClick={() => setActiveImg(product.imageUrl)}
+                onClick={() => setActiveImg(primaryImg)}
                 className={`w-14 h-14 border cursor-pointer overflow-hidden ${
-                  activeImg === product.imageUrl ? 'border-[#111215] ring-1 ring-black' : 'border-gray-300 opacity-70'
+                  activeImg === primaryImg ? 'border-[#111215] ring-1 ring-black' : 'border-gray-300 opacity-70'
                 }`}
               >
-                <img src={product.imageUrl} alt="Flatlay" className="w-full h-full object-cover" />
+                <img src={primaryImg} alt="Primary" className="w-full h-full object-cover" />
               </button>
               <button
-                onClick={() => setActiveImg(product.secondaryImage!)}
+                onClick={() => setActiveImg(secondaryImg)}
                 className={`w-14 h-14 border cursor-pointer overflow-hidden ${
-                  activeImg === product.secondaryImage ? 'border-[#111215] ring-1 ring-black' : 'border-gray-300 opacity-70'
+                  activeImg === secondaryImg ? 'border-[#111215] ring-1 ring-black' : 'border-gray-300 opacity-70'
                 }`}
               >
-                <img src={product.secondaryImage} alt="Streetwear Fit" className="w-full h-full object-cover" />
+                <img src={secondaryImg} alt="Secondary" className="w-full h-full object-cover" />
               </button>
             </div>
           )}
@@ -85,11 +90,13 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
         <div className="md:w-1/2 p-6 sm:p-8 flex flex-col justify-between overflow-y-auto">
           <div>
             <div className="flex items-center justify-between gap-2 mb-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8c8275]">
-                {product.silhouetteTag}
-              </span>
+              {product.silhouetteTag && (
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#8c8275]">
+                  {product.silhouetteTag}
+                </span>
+              )}
               <button
-                onClick={() => onToggleWishlist(product.id)}
+                onClick={() => onToggleWishlist(String(product.id))}
                 className="flex items-center gap-1 text-xs text-gray-500 hover:text-red-600"
               >
                 <Heart size={15} className={isWishlisted ? 'fill-red-600 text-red-600' : ''} />
@@ -129,17 +136,28 @@ export const QuickViewModal: React.FC<QuickViewModalProps> = ({
             </div>
 
             {/* Description & Fabric Specs */}
-            <p className="text-xs text-[#46464b] leading-relaxed mb-4">
-              {product.description}
-            </p>
+            {product.description && (
+              <p className="text-xs text-[#46464b] leading-relaxed mb-4">
+                {product.description}
+              </p>
+            )}
 
-            <div className="bg-[#faf9f5] border border-gray-200 p-3 mb-5 text-[11px] space-y-1">
-              <div className="font-bold text-[#111215] uppercase tracking-wider text-[10px]">
-                Archive Specifications:
+            {(product.fabricDetails || product.measurements) && (
+              <div className="bg-[#faf9f5] border border-gray-200 p-3 mb-5 text-[11px] space-y-1">
+                <div className="font-bold text-[#111215] uppercase tracking-wider text-[10px]">
+                  Archive Specifications:
+                </div>
+                {product.fabricDetails && (
+                  <div className="text-gray-600"><b>Composition:</b> {product.fabricDetails}</div>
+                )}
+                {product.measurements && (
+                  <div className="text-gray-600">
+                    {product.measurements.chest && <><b>Chest / Pit-to-Pit:</b> {product.measurements.chest} </>}
+                    {product.measurements.length && <>| <b>Length:</b> {product.measurements.length}</>}
+                  </div>
+                )}
               </div>
-              <div className="text-gray-600"><b>Composition:</b> {product.fabricDetails}</div>
-              <div className="text-gray-600"><b>Chest / Pit-to-Pit:</b> {product.measurements.chest} | <b>Length:</b> {product.measurements.length}</div>
-            </div>
+            )}
 
             {/* Sleeve Selector - Updates Locked Price */}
             <div className="mb-4">

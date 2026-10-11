@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Heart } from 'lucide-react';
-import { Product, Currency, SleeveOption, JerseySize, getLockedPrice } from '../types';
+import { Product, Currency, SleeveOption, JerseySize, getLockedPrice, getProductPrimaryImage, getProductSecondaryImage } from '../types';
 
 interface ProductCardProps {
   product: Product;
@@ -21,13 +21,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onOrderViaWhatsApp,
   onQuickView,
 }) => {
-  const [selectedSleeve, setSelectedSleeve] = useState<SleeveOption>(product.defaultSleeve);
-  const [selectedSize, setSelectedSize] = useState<JerseySize>(product.defaultSize);
+  const [selectedSleeve, setSelectedSleeve] = useState<SleeveOption>(product.defaultSleeve || 'Half-sleeve');
+  const [selectedSize, setSelectedSize] = useState<JerseySize>(product.defaultSize || 'L');
   const [addedToast, setAddedToast] = useState(false);
   const [showSecondary, setShowSecondary] = useState(false);
 
   const sizes: JerseySize[] = ['S', 'M', 'L', 'XL', 'XXL'];
   const lockedPrice = getLockedPrice(selectedSleeve);
+  const primaryImg = getProductPrimaryImage(product);
+  const secondaryImg = getProductSecondaryImage(product);
 
   const handleAdd = () => {
     onAddToCart(product, selectedSleeve, selectedSize);
@@ -47,17 +49,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         onClick={() => onQuickView(product)}
       >
         {/* Top Left Badge */}
-        <div className="absolute top-2.5 left-2.5 z-10">
-          <span className="inline-block bg-black text-white text-[9px] font-bold tracking-[0.14em] uppercase px-2 py-0.5 border border-white/10">
-            {product.badge}
-          </span>
-        </div>
+        {product.badge && (
+          <div className="absolute top-2.5 left-2.5 z-10">
+            <span className="inline-block bg-black text-white text-[9px] font-bold tracking-[0.14em] uppercase px-2 py-0.5 border border-white/10">
+              {product.badge}
+            </span>
+          </div>
+        )}
 
         {/* Top Right Wishlist Button */}
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onToggleWishlist(product.id);
+            onToggleWishlist(String(product.id));
           }}
           aria-label="Add to wishlist"
           className="absolute top-2.5 right-2.5 z-10 w-7 h-7 rounded-full bg-white/80 backdrop-blur-xs flex items-center justify-center text-gray-700 hover:text-black hover:scale-105 transition-all cursor-pointer shadow-xs"
@@ -70,12 +74,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
         {/* Garment Image / Male Model Lifestyle view on hover */}
         <img
-          src={showSecondary && product.secondaryImage ? product.secondaryImage : product.imageUrl}
+          src={showSecondary && secondaryImg ? secondaryImg : primaryImg}
           alt={product.name}
           className="w-full h-full object-contain object-center transition-transform duration-300 hover:scale-103"
         />
 
-        {product.secondaryImage && (
+        {secondaryImg && (
           <div className="absolute bottom-2 right-2 z-10 bg-black/80 backdrop-blur-xs text-[#e8e3d8] text-[8px] uppercase tracking-wider px-1.5 py-0.5 pointer-events-none">
             {showSecondary ? 'Streetwear Fit' : 'Archive Grail'}
           </div>
@@ -86,9 +90,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       <div className="p-3.5 sm:p-4 flex-1 flex flex-col justify-between">
         <div>
           {/* Silhouette Tag */}
-          <span className="block text-[9px] uppercase tracking-[0.15em] font-semibold text-[#8c8275] mb-1">
-            {product.silhouetteTag}
-          </span>
+          {product.silhouetteTag && (
+            <span className="block text-[9px] uppercase tracking-[0.15em] font-semibold text-[#8c8275] mb-1">
+              {product.silhouetteTag}
+            </span>
+          )}
 
           {/* Title */}
           <h3

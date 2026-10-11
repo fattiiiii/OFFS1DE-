@@ -24,25 +24,42 @@ export function getLockedPrice(sleeve: SleeveOption) {
 }
 
 export interface Product {
-  id: string;
+  id: string | number;
   name: string;
-  badge: string;
+  badge?: string;
   badgeStyle?: 'black' | 'red' | 'gold';
-  silhouetteTag: string;
-  priceAED: number;
-  priceINR: number;
-  inStock: boolean;
-  category: ProductCategory;
-  imageUrl: string;
+  silhouetteTag?: string;
+  priceAED?: number;
+  priceINR?: number;
+  inStock?: boolean;
+  category?: ProductCategory;
+  imageUrl?: string;
+  image?: string | string[];
+  images?: string[];
   secondaryImage?: string;
-  defaultSleeve: SleeveOption;
-  defaultSize: JerseySize;
-  description: string;
-  fabricDetails: string;
-  measurements: {
-    chest: string;
-    length: string;
+  defaultSleeve?: SleeveOption;
+  defaultSize?: JerseySize;
+  description?: string;
+  fabricDetails?: string;
+  measurements?: {
+    chest?: string;
+    length?: string;
   };
+}
+
+export function getProductPrimaryImage(product: Product): string {
+  if (product.imageUrl) return product.imageUrl;
+  if (Array.isArray(product.image) && product.image.length > 0) return product.image[0];
+  if (typeof product.image === 'string') return product.image;
+  if (product.images && product.images.length > 0) return product.images[0];
+  return '';
+}
+
+export function getProductSecondaryImage(product: Product): string | undefined {
+  if (product.secondaryImage) return product.secondaryImage;
+  if (Array.isArray(product.image) && product.image.length > 1) return product.image[1];
+  if (product.images && product.images.length > 1) return product.images[1];
+  return undefined;
 }
 
 export interface CartItem {

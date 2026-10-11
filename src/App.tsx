@@ -14,7 +14,7 @@ import { ConciergeChatModal } from './components/ConciergeChatModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { HowItWorks } from './components/HowItWorks';
 import { PRODUCTS, INITIAL_CART_ITEMS } from './data/products';
-import { Product, CartItem, Currency, SleeveOption, JerseySize, OrderLine, getLockedPrice } from './types';
+import { Product, CartItem, Currency, SleeveOption, JerseySize, OrderLine, getLockedPrice, getProductPrimaryImage } from './types';
 import { detectUserCountry, GeoLocationState, buildGeoState, buildProductWhatsAppUrl, buildBagWhatsAppUrl } from './utils/geolocation';
 import { ShoppingBag } from 'lucide-react';
 
@@ -120,8 +120,9 @@ export default function App() {
 
   // Cart operations
   const handleAddToCart = (product: Product, sleeve: SleeveOption, size: JerseySize) => {
+    const pId = String(product.id);
     const existingIndex = cartItems.findIndex(
-      (item) => item.productId === product.id && item.sleeve === sleeve && item.size === size
+      (item) => item.productId === pId && item.sleeve === sleeve && item.size === size
     );
 
     const locked = getLockedPrice(sleeve);
@@ -132,15 +133,15 @@ export default function App() {
       setCartItems(updated);
     } else {
       const newItem: CartItem = {
-        cartItemId: `${product.id}-${sleeve}-${size}-${Date.now()}`,
-        productId: product.id,
+        cartItemId: `${pId}-${sleeve}-${size}-${Date.now()}`,
+        productId: pId,
         productName: product.name,
         priceAED: locked.aed,
         priceINR: locked.inr,
         sleeve,
         size,
         quantity: 1,
-        imageUrl: product.imageUrl,
+        imageUrl: getProductPrimaryImage(product),
       };
       setCartItems([...cartItems, newItem]);
     }
@@ -336,7 +337,7 @@ Please confirm availability & courier dispatch!`;
       <QuickViewModal
         product={quickViewProduct}
         currency={currency}
-        isWishlisted={quickViewProduct ? wishlist.includes(quickViewProduct.id) : false}
+        isWishlisted={quickViewProduct ? wishlist.includes(String(quickViewProduct.id)) : false}
         onClose={() => setQuickViewProduct(null)}
         onToggleWishlist={handleToggleWishlist}
         onAddToCart={handleAddToCart}

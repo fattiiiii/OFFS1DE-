@@ -46,14 +46,14 @@ export const ProductGrid: React.FC<ProductGridProps> = ({
         </div>
       </div>
 
-      {/* Grid of 6 Products (3 columns on desktop, exactly as in screenshot) */}
+      {/* Grid of Products */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
-        {products.slice(0, 6).map((product) => (
+        {products.map((product) => (
           <ProductCard
             key={product.id}
             product={product}
             currency={currency}
-            isWishlisted={wishlist.includes(product.id)}
+            isWishlisted={wishlist.includes(String(product.id))}
             onToggleWishlist={onToggleWishlist}
             onAddToCart={onAddToCart}
             onOrderViaWhatsApp={onOrderViaWhatsApp}

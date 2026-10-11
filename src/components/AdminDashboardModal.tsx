@@ -26,7 +26,7 @@ import {
   Edit,
   LayoutDashboard,
 } from 'lucide-react';
-import { Product, Currency, OrderLine, AdminOrder, OrderStatus, SleeveOption, JerseySize } from '../types';
+import { Product, Currency, OrderLine, AdminOrder, OrderStatus, SleeveOption, JerseySize, getProductPrimaryImage } from '../types';
 import { PHONE_NUMBERS, INSTAGRAM_HANDLE, INSTAGRAM_URL, GeoLocationState, buildGeoState } from '../utils/geolocation';
 
 interface AdminDashboardModalProps {
@@ -1124,7 +1124,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                       <div key={p.id} className="py-3.5 flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
                           <img
-                            src={p.imageUrl}
+                            src={getProductPrimaryImage(p)}
                             alt={p.name}
                             className="w-12 h-14 object-contain bg-[#f8f8f8] border border-[#e0e0e0] p-1 rounded-xs shrink-0"
                           />
@@ -1137,7 +1137,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                         </div>
 
                         <button
-                          onClick={() => onToggleProductStock && onToggleProductStock(p.id)}
+                          onClick={() => onToggleProductStock && onToggleProductStock(String(p.id))}
                           className={`px-3.5 py-1.5 text-[10px] uppercase font-bold tracking-wider rounded-xs cursor-pointer transition-colors border ${
                             p.inStock
                               ? 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200'
