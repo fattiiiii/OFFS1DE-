@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { TopBar } from './components/TopBar';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { ProductGrid } from './components/ProductGrid';
 import { BrandManifesto } from './components/BrandManifesto';
 import { Footer } from './components/Footer';
-import { BagPanel } from './components/BagPanel';
+import { BagDrawer } from './components/BagDrawer';
 import { QuickViewModal } from './components/QuickViewModal';
+import gsap from 'gsap';
 import { SizeGuideModal } from './components/SizeGuideModal';
 import { AuthenticityModal } from './components/AuthenticityModal';
 import { CardCheckoutModal } from './components/CardCheckoutModal';
@@ -14,7 +15,7 @@ import { ConciergeChatModal } from './components/ConciergeChatModal';
 import { AdminDashboardModal } from './components/AdminDashboardModal';
 import { HowItWorks } from './components/HowItWorks';
 import { PRODUCTS, INITIAL_CART_ITEMS } from './data/products';
-import { Product, CartItem, Currency, SleeveOption, JerseySize, OrderLine, getLockedPrice, getProductPrimaryImage } from './types';
+import { Product, CartItem, Currency, SleeveOption, JerseySize, OrderLine, getLockedPrice, getProductPrimaryImage, toStudioImage } from './types';
 import { detectUserCountry, GeoLocationState, buildGeoState, buildProductWhatsAppUrl, buildBagWhatsAppUrl } from './utils/geolocation';
 import { ShoppingBag } from 'lucide-react';
 
@@ -45,7 +46,12 @@ export default function App() {
       const saved = localStorage.getItem(STORAGE_KEYS.CART);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.map((item: CartItem) => ({
+            ...item,
+            imageUrl: toStudioImage(item.imageUrl),
+          }));
+        }
       }
     } catch {}
     return INITIAL_CART_ITEMS;
@@ -64,7 +70,7 @@ export default function App() {
   });
 
   const [productsList, setProductsList] = useState<Product[]>(PRODUCTS);
-  const [isBagOpen, setIsBagOpen] = useState(true);
+  const [isBagOpen, setIsBagOpen] = useState(false);
 
   // Modals
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
@@ -109,6 +115,28 @@ export default function App() {
       localStorage.setItem(STORAGE_KEYS.WISHLIST, JSON.stringify(wishlist));
     } catch {}
   }, [wishlist]);
+
+  // Load products from backend API /api/products with fallback to static PRODUCTS
+  useEffect(() => {
+    let isMounted = true;
+    fetch('/api/products')
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((data) => {
+        if (isMounted && Array.isArray(data) && data.length > 0) {
+          setProductsList(data);
+        }
+      })
+      .catch((err) => {
+        console.warn('[OFFS1DE] /api/products unavailable, using static fallback:', err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Handle currency change with persistence
   const handleCurrencyChange = (newCurrency: Currency) => {
@@ -213,11 +241,28 @@ Please confirm availability & courier dispatch!`;
 
   const handleToggleProductStock = (productId: string) => {
     setProductsList((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, inStock: !p.inStock } : p))
+      prev.map((p) => (String(p.id) === String(productId) ? { ...p, inStock: !p.inStock } : p))
     );
   };
 
+  const handleProductsChange = (newProducts: Product[]) => {
+    setProductsList(newProducts);
+  };
+
   const totalCartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
+  const floatingBagRef = useRef<HTMLButtonElement>(null);
+  const prevCountRef = useRef(totalCartCount);
+
+  useEffect(() => {
+    if (totalCartCount > prevCountRef.current && floatingBagRef.current) {
+      gsap.fromTo(
+        floatingBagRef.current,
+        { scale: 0.85, rotate: -4 },
+        { scale: 1, rotate: 0, duration: 0.45, ease: 'back.out(2.2)' }
+      );
+    }
+    prevCountRef.current = totalCartCount;
+  }, [totalCartCount]);
 
   return (
     <div className="min-h-screen bg-[#faf9f5] text-[#1b1c1a] flex relative selection:bg-black selection:text-[#d4af37]">
@@ -282,52 +327,36 @@ Please confirm availability & courier dispatch!`;
         />
       </div>
 
-      {/* Right Column: Docked WhatsApp Order Bag on Desktop */}
-      {isBagOpen && (
-        <aside className="hidden lg:block w-[340px] xl:w-[380px] shrink-0 border-l border-gray-200 bg-white sticky top-0 h-screen overflow-hidden z-30 shadow-lg">
-          <BagPanel
-            items={cartItems}
-            currency={currency}
-            onClose={() => setIsBagOpen(false)}
-            onUpdateQuantity={handleUpdateQuantity}
-            onRemoveItem={handleRemoveItem}
-            onCardCheckout={handleBagCardCheckout}
-            onWhatsAppCheckout={handleBagWhatsAppCheckout}
-          />
-        </aside>
-      )}
+      {/* GSAP-Powered Slide-In Cart Drawer */}
+      <BagDrawer
+        isOpen={isBagOpen}
+        onClose={() => setIsBagOpen(false)}
+        items={cartItems}
+        currency={currency}
+        onUpdateQuantity={handleUpdateQuantity}
+        onRemoveItem={handleRemoveItem}
+        onCardCheckout={handleBagCardCheckout}
+        onWhatsAppCheckout={handleBagWhatsAppCheckout}
+      />
 
-      {/* Mobile / Tablet Drawer Version (< 1024px) */}
-      {isBagOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex justify-end">
-          <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-xs"
-            onClick={() => setIsBagOpen(false)}
-          />
-          <div className="relative w-full max-w-sm bg-white h-full shadow-2xl z-10">
-            <BagPanel
-              items={cartItems}
-              currency={currency}
-              onClose={() => setIsBagOpen(false)}
-              onUpdateQuantity={handleUpdateQuantity}
-              onRemoveItem={handleRemoveItem}
-              onCardCheckout={handleBagCardCheckout}
-              onWhatsAppCheckout={handleBagWhatsAppCheckout}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Floating Bag Button when Bag is closed */}
+      {/* Floating Bag Trigger Button when Bag is closed */}
       {!isBagOpen && (
         <button
+          ref={floatingBagRef}
           onClick={() => setIsBagOpen(true)}
-          className="fixed bottom-6 right-6 z-30 bg-[#0a0a0a] text-white p-3.5 shadow-2xl flex items-center gap-2 hover:bg-neutral-800 transition-transform active:scale-95 cursor-pointer rounded-xs border border-[#d4af37]/30"
+          className="fixed bottom-6 right-6 z-30 bg-[#0a0a0a] text-white px-4 py-3 shadow-[0_10px_30px_rgba(0,0,0,0.35)] flex items-center gap-2.5 hover:bg-neutral-900 transition-all active:scale-95 cursor-pointer rounded-xs border border-[#d4af37]/40 backdrop-blur-xs"
           aria-label="Open Order Bag"
         >
-          <ShoppingBag size={18} className="text-[#d4af37]" />
+          <div className="relative">
+            <ShoppingBag size={18} className="text-[#d4af37]" />
+            {totalCartCount > 0 && (
+              <span className="absolute -top-2 -right-2.5 w-4 h-4 bg-[#d4af37] text-black text-[9px] font-extrabold rounded-full flex items-center justify-center">
+                {totalCartCount}
+              </span>
+            )}
+          </div>
           <span className="text-xs font-bold uppercase tracking-wider">
-            BAG ({totalCartCount})
+            BAG
           </span>
           <span className="w-2 h-2 rounded-full bg-[#10b981] animate-pulse"></span>
         </button>
@@ -380,6 +409,7 @@ Please confirm availability & courier dispatch!`;
         isOpen={isAdminOpen}
         onClose={() => setIsAdminOpen(false)}
         products={productsList}
+        onProductsChange={handleProductsChange}
         currentGeo={geoState}
         onSimulateGeo={setGeoState}
         currency={currency}

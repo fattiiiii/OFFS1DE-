@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, MessageCircle, CreditCard, Plus, Minus, Trash2 } from 'lucide-react';
-import { CartItem, Currency, OrderLine } from '../types';
+import { CartItem, Currency, OrderLine, toStudioImage, getOriginalImageUrl } from '../types';
 import { PHONE_NUMBERS } from '../utils/geolocation';
 
 interface BagPanelProps {
@@ -64,11 +64,18 @@ export const BagPanel: React.FC<BagPanelProps> = ({
           items.map((item) => (
             <div key={item.cartItemId} className="py-3.5 first:pt-0 last:pb-0 flex gap-3 items-center">
               {/* Thumbnail */}
-              <div className="w-14 h-16 bg-[#f5f4f0] shrink-0 border border-gray-200 overflow-hidden flex items-center justify-center">
+              <div className="w-14 h-16 bg-[#F1EFE9] shrink-0 border border-gray-200 overflow-hidden flex items-center justify-center p-1">
                 <img
-                  src={item.imageUrl}
+                  src={toStudioImage(item.imageUrl)}
                   alt={item.productName}
-                  className="w-full h-full object-cover object-center"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    const original = getOriginalImageUrl(item.imageUrl);
+                    if (e.currentTarget.src !== original) {
+                      console.warn('[OFFS1DE] Bag panel thumbnail studio image failed to load, falling back to original:', e.currentTarget.src);
+                      e.currentTarget.src = original;
+                    }
+                  }}
                 />
               </div>
 

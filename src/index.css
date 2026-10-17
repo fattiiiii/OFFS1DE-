@@ -8,13 +8,41 @@
 
   body {
     font-family: var(--font-sans);
-    background-color: #faf9f5;
-    color: #1b1c1a;
+    background: linear-gradient(180deg, #0b0b0c 0%, #151517 100%);
+    background-attachment: fixed;
+    color: #f5f5f4;
   }
 
-  h1, h2, h3, .font-serif {
+  h1,
+  h2,
+  h3,
+  .font-serif {
     font-family: var(--font-serif);
   }
+}
+
+/* Product card performance & smooth rendering */
+.product-card-wrapper {
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Prevent unwanted hover stickiness on touch devices */
+@media (hover: none) {
+  .product-card-wrapper:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}
+
+/* Hide scrollbar for category pills on mobile */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Custom scrollbar styling */
@@ -24,11 +52,11 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: #f5f4f0;
+  background: #0b0b0c;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c7c6cb;
+  background: #3a3a3d;
 }
 
 ::-webkit-scrollbar-thumb:hover {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   X,
   Lock,
@@ -25,14 +25,35 @@ import {
   History,
   Edit,
   LayoutDashboard,
+  ArrowUp,
+  ArrowDown,
+  Upload,
+  Image as ImageIcon,
+  Loader2,
+  Sparkles,
+  Layers,
 } from 'lucide-react';
-import { Product, Currency, OrderLine, AdminOrder, OrderStatus, SleeveOption, JerseySize, getProductPrimaryImage } from '../types';
+import {
+  Product,
+  Currency,
+  OrderLine,
+  AdminOrder,
+  OrderStatus,
+  SleeveOption,
+  JerseySize,
+  ProductCategory,
+  getProductPrimaryImage,
+  getProductSecondaryImage,
+  toStudioImage,
+  getOriginalImageUrl,
+} from '../types';
 import { PHONE_NUMBERS, INSTAGRAM_HANDLE, INSTAGRAM_URL, GeoLocationState, buildGeoState } from '../utils/geolocation';
 
 interface AdminDashboardModalProps {
   isOpen: boolean;
   onClose: () => void;
   products: Product[];
+  onProductsChange?: (newProducts: Product[]) => void;
   currentGeo: GeoLocationState;
   onSimulateGeo: (geoState: GeoLocationState) => void;
   currency: Currency;
@@ -103,10 +124,28 @@ const FAILED_ATTEMPTS_KEY = 'offs1de_login_attempts';
 const LOCKOUT_KEY = 'offs1de_lockout_until';
 const SESSION_DURATION_MS = 30 * 60 * 1000; // 30 minutes inactivity expiry
 
+// Cloudinary unsigned upload configuration
+const CLOUDINARY_CLOUD_NAME =
+  (import.meta.env?.VITE_CLOUDINARY_CLOUD_NAME as string) || 'z7xfimgd';
+const CLOUDINARY_UPLOAD_PRESET =
+  (import.meta.env?.VITE_CLOUDINARY_UPLOAD_PRESET as string) || 'offs1de_unsigned';
+
+const getAuthToken = (): string => {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed.token) return parsed.token;
+    }
+  } catch {}
+  return 'jwt_default_admin_session';
+};
+
 export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   isOpen,
   onClose,
   products,
+  onProductsChange,
   currentGeo,
   onSimulateGeo,
   currency,
@@ -162,6 +201,34 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
   const [newNotes, setNewNotes] = useState('');
   const [formSuccessMessage, setFormSuccessMessage] = useState('');
 
+  // Product Catalog & Management state
+  const [productSearch, setProductSearch] = useState('');
+  const [productCategoryFilter, setProductCategoryFilter] = useState<'ALL' | ProductCategory>('ALL');
+  const [isProductFormOpen, setIsProductFormOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
+  const [formName, setFormName] = useState('');
+  const [formBadge, setFormBadge] = useState('');
+  const [formSilhouetteTag, setFormSilhouetteTag] = useState('');
+  const [formCategory, setFormCategory] = useState<ProductCategory>('FOOTBALL');
+  const [formInStock, setFormInStock] = useState(true);
+  const [formDefaultSleeve, setFormDefaultSleeve] = useState<SleeveOption>('Half-sleeve');
+  const [formDefaultSize, setFormDefaultSize] = useState<JerseySize>('L');
+  const [formDescription, setFormDescription] = useState('');
+  const [formFrontImage, setFormFrontImage] = useState('');
+  const [formBackImage, setFormBackImage] = useState('');
+
+  const [uploadingFront, setUploadingFront] = useState(false);
+  const [uploadProgressFront, setUploadProgressFront] = useState(0);
+  const [uploadingBack, setUploadingBack] = useState(false);
+  const [uploadProgressBack, setUploadProgressBack] = useState(0);
+  const [productFormError, setProductFormError] = useState('');
+  const [productFormSuccess, setProductFormSuccess] = useState('');
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
+
+  const frontInputRef = useRef<HTMLInputElement>(null);
+  const backInputRef = useRef<HTMLInputElement>(null);
+
   // Inactivity Timer (30 minutes)
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -213,7 +280,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLockedOut) return;
 
@@ -221,18 +288,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     const validUser = cleanUser === 'Offs1de_' || cleanUser.toLowerCase() === 'offs1de' || cleanUser.toLowerCase() === 'admin';
     const validPass = password === 'Offside@2026#' || password === 'admin123' || password === 'offs1de2026' || password === '0000' || password === 'admin';
 
-    if (validUser && validPass) {
-      setIsAuthenticated(true);
-      setLoginError('');
-      localStorage.setItem(FAILED_ATTEMPTS_KEY, '0');
-      const sessionData = {
-        user: username,
-        token: `jwt_${Math.random().toString(36).substring(2)}_${Date.now()}`,
-        expiresAt: Date.now() + SESSION_DURATION_MS,
-      };
-      localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
-      setActiveTab('dashboard');
-    } else {
+    if (!validUser || !validPass) {
       const attempts = Number(localStorage.getItem(FAILED_ATTEMPTS_KEY) || 0) + 1;
       localStorage.setItem(FAILED_ATTEMPTS_KEY, String(attempts));
 
@@ -245,7 +301,37 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
       } else {
         setLoginError(`Invalid credentials. ${5 - attempts} attempt(s) remaining before lockout.`);
       }
+      return;
     }
+
+    // Try server authentication first
+    let serverToken = `jwt_${Math.random().toString(36).substring(2)}_${Date.now()}`;
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: cleanUser, password }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.token) {
+          serverToken = data.token;
+        }
+      }
+    } catch (err) {
+      console.warn('API server login unreachable, proceeding with client session:', err);
+    }
+
+    setIsAuthenticated(true);
+    setLoginError('');
+    localStorage.setItem(FAILED_ATTEMPTS_KEY, '0');
+    const sessionData = {
+      user: username,
+      token: serverToken,
+      expiresAt: Date.now() + SESSION_DURATION_MS,
+    };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(sessionData));
+    setActiveTab('dashboard');
   };
 
   const handleLogout = () => {
@@ -254,6 +340,303 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
     setPassword('');
     setSelectedOrder(null);
   };
+
+  // Direct Cloudinary Browser Upload Handler
+  const handleCloudinaryUpload = (file: File, side: 'front' | 'back') => {
+    if (!file) return;
+    if (side === 'front') {
+      setUploadingFront(true);
+      setUploadProgressFront(0);
+    } else {
+      setUploadingBack(true);
+      setUploadProgressBack(0);
+    }
+    setProductFormError('');
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        if (side === 'front') setUploadProgressFront(pct);
+        else setUploadProgressBack(pct);
+      }
+    };
+
+    xhr.onload = () => {
+      if (side === 'front') setUploadingFront(false);
+      else setUploadingBack(false);
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (data.secure_url) {
+            if (side === 'front') {
+              setFormFrontImage(data.secure_url);
+            } else {
+              setFormBackImage(data.secure_url);
+            }
+          } else {
+            setProductFormError('Cloudinary returned no secure URL.');
+          }
+        } catch {
+          setProductFormError('Error parsing Cloudinary upload response.');
+        }
+      } else {
+        let msg = `Upload failed (Status ${xhr.status})`;
+        try {
+          const errJson = JSON.parse(xhr.responseText);
+          if (errJson?.error?.message) {
+            msg += `: ${errJson.error.message}`;
+          }
+        } catch {}
+        setProductFormError(`${msg}. Tip: Ensure unsigned preset "${CLOUDINARY_UPLOAD_PRESET}" exists in Cloudinary (${CLOUDINARY_CLOUD_NAME}), or paste direct image URL.`);
+      }
+    };
+
+    xhr.onerror = () => {
+      if (side === 'front') setUploadingFront(false);
+      else setUploadingBack(false);
+      setProductFormError('Network connection issue during upload. You can paste the direct image URL instead.');
+    };
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+    xhr.send(formData);
+  };
+
+  const openAddProductModal = () => {
+    setEditingProduct(null);
+    setFormName('');
+    setFormBadge('');
+    setFormSilhouetteTag('');
+    setFormCategory('FOOTBALL');
+    setFormInStock(true);
+    setFormDefaultSleeve('Half-sleeve');
+    setFormDefaultSize('L');
+    setFormDescription('');
+    setFormFrontImage('');
+    setFormBackImage('');
+    setProductFormError('');
+    setProductFormSuccess('');
+    setIsProductFormOpen(true);
+  };
+
+  const openEditProductModal = (p: Product) => {
+    setEditingProduct(p);
+    setFormName(p.name || '');
+    setFormBadge(p.badge || '');
+    setFormSilhouetteTag(p.silhouetteTag || '');
+    setFormCategory(p.category || 'FOOTBALL');
+    setFormInStock(p.inStock !== false);
+    setFormDefaultSleeve(p.defaultSleeve || 'Half-sleeve');
+    setFormDefaultSize(p.defaultSize || 'L');
+    setFormDescription(p.description || '');
+
+    const primary = getOriginalImageUrl(getProductPrimaryImage(p));
+    const secondary = getOriginalImageUrl(getProductSecondaryImage(p) || (Array.isArray(p.images) && p.images[1]) || '');
+    setFormFrontImage(primary);
+    setFormBackImage(secondary);
+    setProductFormError('');
+    setProductFormSuccess('');
+    setIsProductFormOpen(true);
+  };
+
+  const handleSaveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formName.trim()) {
+      setProductFormError('Jersey name is required.');
+      return;
+    }
+
+    setIsSavingProduct(true);
+    setProductFormError('');
+    setProductFormSuccess('');
+
+    const images: string[] = [];
+    if (formFrontImage.trim()) images.push(formFrontImage.trim());
+    if (formBackImage.trim()) images.push(formBackImage.trim());
+
+    const token = getAuthToken();
+
+    const payload = {
+      name: formName.trim(),
+      badge: formBadge.trim() || undefined,
+      silhouetteTag: formSilhouetteTag.trim() || undefined,
+      category: formCategory,
+      inStock: formInStock,
+      defaultSleeve: formDefaultSleeve,
+      defaultSize: formDefaultSize,
+      description: formDescription.trim(),
+      images: images.length > 0 ? images : ['/products/product1.jpeg'],
+      secondaryImage: formBackImage.trim() || undefined,
+    };
+
+    try {
+      let res;
+      if (editingProduct) {
+        res = await fetch(`/api/products/${editingProduct.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        res = await fetch('/api/products', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+          body: JSON.stringify(payload),
+        });
+      }
+
+      if (res.ok) {
+        const data = await res.json();
+        const savedProd: Product = data.product || {
+          ...payload,
+          id: editingProduct ? editingProduct.id : Date.now(),
+        };
+
+        let updatedList: Product[];
+        if (editingProduct) {
+          updatedList = products.map((p) =>
+            String(p.id) === String(editingProduct.id) ? { ...p, ...savedProd } : p
+          );
+        } else {
+          updatedList = [savedProd, ...products];
+        }
+
+        if (onProductsChange) {
+          onProductsChange(updatedList);
+        }
+
+        setProductFormSuccess(
+          editingProduct ? 'Jersey updated successfully!' : 'New jersey added to catalog!'
+        );
+        setTimeout(() => {
+          setIsProductFormOpen(false);
+          setEditingProduct(null);
+          setProductFormSuccess('');
+        }, 1200);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setProductFormError(errData.error || `Server error (${res.status})`);
+      }
+    } catch (err: any) {
+      // Offline fallback
+      const savedProd: Product = {
+        ...payload,
+        id: editingProduct ? editingProduct.id : Date.now(),
+      };
+      let updatedList: Product[];
+      if (editingProduct) {
+        updatedList = products.map((p) =>
+          String(p.id) === String(editingProduct.id) ? { ...p, ...savedProd } : p
+        );
+      } else {
+        updatedList = [savedProd, ...products];
+      }
+      if (onProductsChange) {
+        onProductsChange(updatedList);
+      }
+      setProductFormSuccess('Saved locally in catalog!');
+      setTimeout(() => {
+        setIsProductFormOpen(false);
+        setEditingProduct(null);
+        setProductFormSuccess('');
+      }, 1200);
+    } finally {
+      setIsSavingProduct(false);
+    }
+  };
+
+  const handleDeleteProduct = async (p: Product) => {
+    if (!window.confirm(`Are you sure you want to delete "${p.name}"? This removes it permanently from the store.`)) {
+      return;
+    }
+
+    const token = getAuthToken();
+    try {
+      await fetch(`/api/products/${p.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+    } catch (err) {
+      console.warn('Network error deleting on server, updating state locally:', err);
+    }
+
+    const updatedList = products.filter((item) => String(item.id) !== String(p.id));
+    if (onProductsChange) {
+      onProductsChange(updatedList);
+    }
+  };
+
+  const handleMoveProduct = async (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= products.length) return;
+
+    const reordered = [...products];
+    const [moved] = reordered.splice(index, 1);
+    reordered.splice(targetIndex, 0, moved);
+
+    if (onProductsChange) {
+      onProductsChange(reordered);
+    }
+
+    const token = getAuthToken();
+    try {
+      await fetch('/api/products/reorder', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ productIds: reordered.map((p) => p.id) }),
+      });
+    } catch (err) {
+      console.warn('Failed to persist product reordering to server:', err);
+    }
+  };
+
+  const handleToggleStockWithAPI = async (p: Product) => {
+    const nextStock = !p.inStock;
+    if (onToggleProductStock) {
+      onToggleProductStock(String(p.id));
+    }
+    const token = getAuthToken();
+    try {
+      await fetch(`/api/products/${p.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ inStock: nextStock }),
+      });
+    } catch (err) {
+      console.warn('Failed to sync stock toggle to server:', err);
+    }
+  };
+
+  const filteredCatalogProducts = products.filter((p) => {
+    const matchesCat = productCategoryFilter === 'ALL' || p.category === productCategoryFilter;
+    const q = productSearch.toLowerCase();
+    const matchesSearch =
+      !productSearch.trim() ||
+      p.name.toLowerCase().includes(q) ||
+      (p.badge && p.badge.toLowerCase().includes(q)) ||
+      (p.silhouetteTag && p.silhouetteTag.toLowerCase().includes(q)) ||
+      (p.description && p.description.toLowerCase().includes(q));
+    return matchesCat && matchesSearch;
+  });
 
   const handleUpdateOrderStatus = (orderId: string, newStatus: OrderStatus) => {
     setOrders((prev) =>
@@ -531,7 +914,7 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 }`}
               >
                 <Package size={14} className="text-[#d4af37]" />
-                <span>Inventory ({products.length})</span>
+                <span>Catalog & Jerseys ({products.length})</span>
               </button>
 
               <button
@@ -1105,49 +1488,673 @@ export const AdminDashboardModal: React.FC<AdminDashboardModalProps> = ({
                 </div>
               )}
 
-              {/* INVENTORY TAB */}
+              {/* CATALOG & INVENTORY TAB */}
               {activeTab === 'inventory' && (
-                <div className="space-y-4 bg-[#ffffff] p-5 border border-[#e0e0e0] rounded-sm shadow-sm">
-                  <div className="flex items-center justify-between border-b border-gray-200 pb-3">
+                <div className="space-y-5 bg-[#ffffff] p-4 sm:p-6 border border-[#e0e0e0] rounded-sm shadow-sm">
+                  {/* Header & Main Action */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
                     <div>
-                      <h4 className="font-serif text-lg font-bold text-[#1a1a1a]">
-                        Archive Stock Management
-                      </h4>
-                      <p className="text-xs text-gray-500">
-                        Toggle stock availability for active drops. Changes sync instantly across the store.
+                      <div className="flex items-center gap-2">
+                        <Package size={20} className="text-[#d4af37]" />
+                        <h4 className="font-serif text-lg sm:text-xl font-bold text-[#1a1a1a]">
+                          Jersey Catalog & Asset Studio
+                        </h4>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Add, edit, reorder drops, upload Front & Back jersey images directly to Cloudinary (cloud: <span className="font-mono text-gray-700 font-bold">{CLOUDINARY_CLOUD_NAME}</span>), and toggle live stock.
                       </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={openAddProductModal}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#d4af37] hover:bg-[#c29f2d] text-[#1a1a1a] font-bold text-xs uppercase tracking-wider rounded-xs cursor-pointer transition-all shadow-sm hover:scale-[1.02] shrink-0"
+                    >
+                      <Plus size={15} />
+                      <span>Add New Jersey</span>
+                    </button>
+                  </div>
+
+                  {/* Filter & Metric Bar */}
+                  <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs bg-[#f8f8f8] p-3 rounded-xs border border-[#e5e5e5]">
+                    {/* Search */}
+                    <div className="relative flex-1 min-w-[200px]">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input
+                        type="text"
+                        placeholder="Search jerseys by name, badge, tag..."
+                        value={productSearch}
+                        onChange={(e) => setProductSearch(e.target.value)}
+                        className="w-full pl-9 pr-7 py-2 bg-white border border-[#d1d5db] text-[#1a1a1a] rounded-xs focus:outline-none focus:border-[#d4af37]"
+                      />
+                      {productSearch && (
+                        <button
+                          onClick={() => setProductSearch('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-black cursor-pointer"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Category Filter Pills */}
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1 md:pb-0">
+                      {(['ALL', 'FOOTBALL', 'BASKETBALL', 'CRICKET', 'VAULT'] as const).map((cat) => (
+                        <button
+                          key={cat}
+                          onClick={() => setProductCategoryFilter(cat)}
+                          className={`px-2.5 py-1.5 text-[10px] uppercase font-bold tracking-wider rounded-xs cursor-pointer whitespace-nowrap transition-colors border ${
+                            productCategoryFilter === cat
+                              ? 'bg-[#d4af37] text-black border-[#d4af37]'
+                              : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Stock Counts */}
+                    <div className="flex items-center gap-2 font-mono text-[11px] shrink-0">
+                      <span className="px-2 py-1 bg-white border border-gray-200 rounded-xs text-gray-700">
+                        Total: <strong>{products.length}</strong>
+                      </span>
+                      <span className="px-2 py-1 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-xs">
+                        In Stock: <strong>{products.filter((p) => p.inStock).length}</strong>
+                      </span>
+                      <span className="px-2 py-1 bg-rose-50 border border-rose-300 text-rose-800 rounded-xs">
+                        Sold Out: <strong>{products.filter((p) => !p.inStock).length}</strong>
+                      </span>
                     </div>
                   </div>
 
-                  <div className="divide-y divide-gray-200">
-                    {products.map((p) => (
-                      <div key={p.id} className="py-3.5 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <img
-                            src={getProductPrimaryImage(p)}
-                            alt={p.name}
-                            className="w-12 h-14 object-contain bg-[#f8f8f8] border border-[#e0e0e0] p-1 rounded-xs shrink-0"
+                  {/* Products Grid / Cards */}
+                  <div className="space-y-3">
+                    {filteredCatalogProducts.length === 0 ? (
+                      <div className="p-8 text-center text-gray-500 bg-gray-50 border border-dashed border-gray-300 rounded-xs text-xs">
+                        No jerseys match your filter or search query.
+                      </div>
+                    ) : (
+                      filteredCatalogProducts.map((p, index) => {
+                        const primaryImg = getProductPrimaryImage(p);
+                        const secondaryImg = getProductSecondaryImage(p);
+                        const isCloudinaryPrimary = primaryImg.includes('cloudinary.com');
+                        const isCloudinarySecondary = secondaryImg?.includes('cloudinary.com');
+
+                        return (
+                          <div
+                            key={p.id}
+                            className="p-3.5 bg-white border border-[#e0e0e0] hover:border-[#d4af37]/60 rounded-xs transition-all shadow-2xs flex flex-col md:flex-row md:items-center justify-between gap-4"
+                          >
+                            {/* Left: Front and Back Visual Thumbnails */}
+                            <div className="flex items-center gap-3 shrink-0">
+                              {/* Order position number */}
+                              <span className="w-6 text-center font-mono text-xs font-bold text-gray-400">
+                                #{index + 1}
+                              </span>
+
+                              {/* Front Thumbnail */}
+                              <div className="relative group w-14 h-18 bg-[#F1EFE9] border border-gray-200 rounded-xs overflow-hidden flex items-center justify-center shrink-0 p-0.5">
+                                {primaryImg ? (
+                                  <img
+                                    src={primaryImg}
+                                    alt={`${p.name} Front`}
+                                    className="w-full h-full object-contain"
+                                    onError={(e) => {
+                                      const original = getOriginalImageUrl(primaryImg);
+                                      if (e.currentTarget.src !== original) {
+                                        console.warn('[OFFS1DE] Admin catalog front studio image failed to load, falling back to original:', e.currentTarget.src);
+                                        e.currentTarget.src = original;
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <ImageIcon size={18} className="text-gray-400" />
+                                )}
+                                <span className="absolute bottom-0 inset-x-0 bg-black/80 text-[7.5px] text-white text-center font-bold uppercase py-0.5 tracking-wider">
+                                  Front
+                                </span>
+                              </div>
+
+                              {/* Back Thumbnail */}
+                              <div className="relative group w-14 h-18 bg-[#F1EFE9] border border-gray-200 rounded-xs overflow-hidden flex items-center justify-center shrink-0 p-0.5">
+                                {secondaryImg ? (
+                                  <img
+                                    src={secondaryImg}
+                                    alt={`${p.name} Back`}
+                                    className="w-full h-full object-contain"
+                                    onError={(e) => {
+                                      const original = getOriginalImageUrl(secondaryImg);
+                                      if (e.currentTarget.src !== original) {
+                                        console.warn('[OFFS1DE] Admin catalog back studio image failed to load, falling back to original:', e.currentTarget.src);
+                                        e.currentTarget.src = original;
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <div className="text-[8px] text-gray-400 text-center font-mono">
+                                    No Back
+                                  </div>
+                                )}
+                                <span className="absolute bottom-0 inset-x-0 bg-black/80 text-[7.5px] text-white text-center font-bold uppercase py-0.5 tracking-wider">
+                                  Back
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Middle: Details & Meta */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className="px-1.5 py-0.5 bg-black text-white text-[8.5px] font-bold uppercase tracking-wider rounded-2xs">
+                                  {p.category || 'FOOTBALL'}
+                                </span>
+                                {p.badge && (
+                                  <span className="px-1.5 py-0.5 bg-[#d4af37]/20 text-[#8c6b0d] border border-[#d4af37]/40 text-[8.5px] font-bold uppercase tracking-wider rounded-2xs">
+                                    {p.badge}
+                                  </span>
+                                )}
+                                {p.silhouetteTag && (
+                                  <span className="text-[9.5px] text-gray-500 font-mono">
+                                    • {p.silhouetteTag}
+                                  </span>
+                                )}
+                              </div>
+
+                              <h5 className="text-sm font-bold text-[#1a1a1a] truncate font-serif">
+                                {p.name}
+                              </h5>
+
+                              <div className="flex items-center gap-3 text-[11px] text-gray-500 mt-1 flex-wrap">
+                                <span className="font-mono text-gray-700 font-semibold">
+                                  Half: AED 35 / ₹650 • Full: AED 40 / ₹720
+                                </span>
+                                <span>Default: {p.defaultSleeve || 'Half-sleeve'} ({p.defaultSize || 'L'})</span>
+                                {(isCloudinaryPrimary || isCloudinarySecondary) && (
+                                  <span className="text-emerald-700 text-[10px] flex items-center gap-0.5 font-bold">
+                                    <CheckCircle2 size={11} /> Cloudinary Hosted
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Right: Actions (Stock, Reorder, Edit, Delete) */}
+                            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end pt-2 md:pt-0 border-t md:border-t-0 border-gray-100">
+                              {/* Live Stock Toggle */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleStockWithAPI(p)}
+                                className={`px-3 py-1.5 text-[10px] uppercase font-bold tracking-wider rounded-xs cursor-pointer transition-colors border ${
+                                  p.inStock
+                                    ? 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200'
+                                    : 'bg-red-100 text-red-900 border-red-300 hover:bg-red-200'
+                                }`}
+                              >
+                                {p.inStock ? 'In Stock' : 'Sold Out'}
+                              </button>
+
+                              {/* Reorder Buttons */}
+                              <div className="flex items-center border border-gray-300 rounded-xs bg-[#f8f8f8]">
+                                <button
+                                  type="button"
+                                  disabled={index === 0}
+                                  onClick={() => handleMoveProduct(index, 'up')}
+                                  title="Move Up"
+                                  className="p-1.5 text-gray-600 hover:text-black hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
+                                >
+                                  <ArrowUp size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={index === products.length - 1}
+                                  onClick={() => handleMoveProduct(index, 'down')}
+                                  title="Move Down"
+                                  className="p-1.5 text-gray-600 hover:text-black hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer border-l border-gray-300"
+                                >
+                                  <ArrowDown size={13} />
+                                </button>
+                              </div>
+
+                              {/* Edit Button */}
+                              <button
+                                type="button"
+                                onClick={() => openEditProductModal(p)}
+                                className="inline-flex items-center gap-1 px-3 py-1.5 bg-[#f0f0f0] hover:bg-gray-200 text-gray-800 text-[10.5px] font-bold rounded-xs cursor-pointer transition-colors border border-gray-300"
+                              >
+                                <Edit size={12} />
+                                <span>Edit</span>
+                              </button>
+
+                              {/* Delete Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteProduct(p)}
+                                title="Delete Jersey"
+                                className="p-1.5 text-rose-600 hover:text-rose-800 hover:bg-rose-50 rounded-xs cursor-pointer transition-colors border border-rose-200"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* ADD / EDIT JERSEY MODAL DIALOG */}
+              {isProductFormOpen && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-6 bg-black/70 backdrop-blur-xs overflow-y-auto">
+                  <div className="relative w-full max-w-3xl bg-white border border-[#e0e0e0] shadow-2xl rounded-sm my-auto max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                    {/* Modal Header */}
+                    <div className="px-5 py-4 border-b border-[#e0e0e0] bg-white flex items-center justify-between sticky top-0 z-10">
+                      <div>
+                        <h4 className="font-serif text-lg sm:text-xl font-bold text-[#1a1a1a]">
+                          {editingProduct ? `Edit Jersey: ${editingProduct.name}` : 'Add New Jersey Drop'}
+                        </h4>
+                        <p className="text-[11px] text-gray-500">
+                          {editingProduct
+                            ? 'Update images, badge, details, and live availability.'
+                            : 'Upload jersey imagery directly to Cloudinary and deploy to storefront.'}
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          setIsProductFormOpen(false);
+                          setEditingProduct(null);
+                        }}
+                        className="p-1.5 text-gray-500 hover:text-black rounded-xs hover:bg-gray-100 cursor-pointer"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+
+                    {/* Modal Body / Form */}
+                    <form onSubmit={handleSaveProduct} className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5 text-xs">
+                      {/* Notifications */}
+                      {productFormError && (
+                        <div className="p-3 bg-red-50 border border-red-200 text-red-800 text-xs rounded-xs flex items-center gap-2">
+                          <AlertCircle size={15} className="text-red-600 shrink-0" />
+                          <span>{productFormError}</span>
+                        </div>
+                      )}
+
+                      {productFormSuccess && (
+                        <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold rounded-xs flex items-center gap-2">
+                          <CheckCircle2 size={16} className="text-emerald-700 shrink-0" />
+                          <span>{productFormSuccess}</span>
+                        </div>
+                      )}
+
+                      {/* Jersey Details Grid */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* Jersey Name */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                            Jersey Name *
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            placeholder="e.g. Real Madrid “BenQ Era” 2006-07 Away Kit"
+                            value={formName}
+                            onChange={(e) => setFormName(e.target.value)}
+                            className="w-full px-3.5 py-2.5 bg-[#f0f0f0] border border-[#d1d5db] text-[#1a1a1a] rounded-xs focus:outline-none focus:border-[#d4af37] font-medium"
                           />
-                          <div className="min-w-0">
-                            <h5 className="text-xs font-bold text-[#1a1a1a] truncate">{p.name}</h5>
-                            <span className="text-[10.5px] text-gray-500 font-mono">
-                              Half: AED 35 / ₹650 • Full: AED 40 / ₹720
-                            </span>
+                        </div>
+
+                        {/* Category */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                            Sport Category
+                          </label>
+                          <select
+                            value={formCategory}
+                            onChange={(e) => setFormCategory(e.target.value as ProductCategory)}
+                            className="w-full px-3.5 py-2.5 bg-[#f0f0f0] border border-[#d1d5db] text-[#1a1a1a] rounded-xs focus:outline-none focus:border-[#d4af37] cursor-pointer"
+                          >
+                            <option value="FOOTBALL">FOOTBALL</option>
+                            <option value="BASKETBALL">BASKETBALL</option>
+                            <option value="CRICKET">CRICKET</option>
+                            <option value="VAULT">VAULT</option>
+                          </select>
+                        </div>
+
+                        {/* Stock Availability */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                            Stock Availability
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setFormInStock(!formInStock)}
+                            className={`w-full py-2.5 font-bold uppercase rounded-xs border transition-colors cursor-pointer ${
+                              formInStock
+                                ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                                : 'bg-rose-100 text-rose-900 border-rose-300'
+                            }`}
+                          >
+                            {formInStock ? '✓ In Stock' : '✗ Sold Out'}
+                          </button>
+                        </div>
+
+                        {/* Badge Text */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                            Badge Label (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. ARCHIVE GRAIL, NEW DROP, UCL FINAL"
+                            value={formBadge}
+                            onChange={(e) => setFormBadge(e.target.value)}
+                            className="w-full px-3.5 py-2.5 bg-[#f0f0f0] border border-[#d1d5db] text-[#1a1a1a] rounded-xs focus:outline-none focus:border-[#d4af37]"
+                          />
+                        </div>
+
+                        {/* Silhouette Tag */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                            Silhouette Tag (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. BECKHAM #23 ICON, MODERN STREETWEAR"
+                            value={formSilhouetteTag}
+                            onChange={(e) => setFormSilhouetteTag(e.target.value)}
+                            className="w-full px-3.5 py-2.5 bg-[#f0f0f0] border border-[#d1d5db] text-[#1a1a1a] rounded-xs focus:outline-none focus:border-[#d4af37]"
+                          />
+                        </div>
+
+                        {/* Default Sleeve */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                            Default Sleeve Silhouette
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setFormDefaultSleeve('Half-sleeve')}
+                              className={`py-2 text-center font-bold rounded-xs cursor-pointer border ${
+                                formDefaultSleeve === 'Half-sleeve'
+                                  ? 'bg-[#d4af37] text-black border-[#d4af37]'
+                                  : 'bg-[#f0f0f0] text-gray-700 border-gray-300'
+                              }`}
+                            >
+                              Half-sleeve
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setFormDefaultSleeve('Full-sleeve')}
+                              className={`py-2 text-center font-bold rounded-xs cursor-pointer border ${
+                                formDefaultSleeve === 'Full-sleeve'
+                                  ? 'bg-[#d4af37] text-black border-[#d4af37]'
+                                  : 'bg-[#f0f0f0] text-gray-700 border-gray-300'
+                              }`}
+                            >
+                              Full-sleeve
+                            </button>
                           </div>
                         </div>
 
+                        {/* Default Size */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                            Default Size
+                          </label>
+                          <select
+                            value={formDefaultSize}
+                            onChange={(e) => setFormDefaultSize(e.target.value as JerseySize)}
+                            className="w-full px-3.5 py-2.5 bg-[#f0f0f0] border border-[#d1d5db] text-[#1a1a1a] rounded-xs focus:outline-none focus:border-[#d4af37] cursor-pointer"
+                          >
+                            <option value="S">Small (S)</option>
+                            <option value="M">Medium (M)</option>
+                            <option value="L">Large (L)</option>
+                            <option value="XL">XL</option>
+                            <option value="XXL">XXL</option>
+                          </select>
+                        </div>
+
+                        {/* Description */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
+                            Product Description
+                          </label>
+                          <textarea
+                            rows={3}
+                            placeholder="Historic context, fabric specification, stitch details..."
+                            value={formDescription}
+                            onChange={(e) => setFormDescription(e.target.value)}
+                            className="w-full px-3.5 py-2.5 bg-[#f0f0f0] border border-[#d1d5db] text-[#1a1a1a] rounded-xs focus:outline-none focus:border-[#d4af37]"
+                          />
+                        </div>
+                      </div>
+
+                      {/* CLOUDINARY DIRECT BROWSER UPLOAD SECTION */}
+                      <div className="p-4 sm:p-5 bg-[#fafafa] border border-[#e5e5e5] rounded-xs space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-200 pb-2.5">
+                          <div className="flex items-center gap-2">
+                            <Upload size={16} className="text-[#d4af37]" />
+                            <h5 className="font-serif font-bold text-[#1a1a1a] text-sm">
+                              Jersey Visuals (Cloudinary Direct Browser Upload)
+                            </h5>
+                          </div>
+                          <span className="text-[10px] font-mono text-gray-500 bg-gray-200 px-2 py-0.5 rounded-2xs">
+                            Preset: {CLOUDINARY_UPLOAD_PRESET} • Cloud: {CLOUDINARY_CLOUD_NAME}
+                          </span>
+                        </div>
+
+                        {/* Hidden file inputs */}
+                        <input
+                          ref={frontInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files?.[0]) {
+                              handleCloudinaryUpload(e.target.files[0], 'front');
+                            }
+                          }}
+                        />
+                        <input
+                          ref={backInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files?.[0]) {
+                              handleCloudinaryUpload(e.target.files[0], 'back');
+                            }
+                          }}
+                        />
+
+                        {/* 2-Column Grid for Front & Back Image */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {/* Front Image Box */}
+                          <div className="p-3 bg-white border border-[#e0e0e0] rounded-xs space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-[11px] text-gray-800 uppercase tracking-wider">
+                                Front Visual (Primary) *
+                              </span>
+                              {formFrontImage && (
+                                <button
+                                  type="button"
+                                  onClick={() => setFormFrontImage('')}
+                                  className="text-[10px] text-rose-600 hover:underline cursor-pointer"
+                                >
+                                  Remove
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Preview Frame */}
+                            <div className="aspect-[4/5] bg-[#F1EFE9] border border-gray-200 rounded-xs flex items-center justify-center overflow-hidden relative">
+                              {formFrontImage ? (
+                                <img
+                                  src={toStudioImage(formFrontImage)}
+                                  alt="Front Visual Preview"
+                                  className="w-full h-full object-contain p-2"
+                                  onError={(e) => {
+                                    const original = getOriginalImageUrl(formFrontImage);
+                                    if (e.currentTarget.src !== original) {
+                                      console.warn('[OFFS1DE] Admin form front preview studio image failed to load, falling back to original:', e.currentTarget.src);
+                                      e.currentTarget.src = original;
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <div className="text-center text-gray-400 p-4">
+                                  <ImageIcon size={28} className="mx-auto mb-1 opacity-60" />
+                                  <span className="text-[10px] block">No front image uploaded</span>
+                                </div>
+                              )}
+
+                              {/* Progress Overlay */}
+                              {uploadingFront && (
+                                <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center text-white p-4">
+                                  <Loader2 size={24} className="animate-spin text-[#d4af37] mb-2" />
+                                  <span className="text-xs font-mono font-bold mb-1">
+                                    Uploading... {uploadProgressFront}%
+                                  </span>
+                                  <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden">
+                                    <div
+                                      className="bg-[#d4af37] h-full transition-all duration-150"
+                                      style={{ width: `${uploadProgressFront}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Upload Button */}
+                            <button
+                              type="button"
+                              disabled={uploadingFront}
+                              onClick={() => frontInputRef.current?.click()}
+                              className="w-full py-2 bg-[#f0f0f0] hover:bg-[#d4af37] hover:text-black text-gray-800 font-bold text-[10.5px] uppercase tracking-wider rounded-xs cursor-pointer transition-colors flex items-center justify-center gap-1.5 border border-gray-300 disabled:opacity-50"
+                            >
+                              <Upload size={12} />
+                              <span>{uploadingFront ? 'Uploading Front...' : 'Upload Front Image'}</span>
+                            </button>
+
+                            {/* Manual URL Input */}
+                            <div>
+                              <span className="block text-[10px] text-gray-500 mb-0.5">Or paste direct URL:</span>
+                              <input
+                                type="url"
+                                placeholder="https://res.cloudinary.com/... or /products/..."
+                                value={formFrontImage}
+                                onChange={(e) => setFormFrontImage(e.target.value)}
+                                className="w-full px-2.5 py-1.5 bg-[#f0f0f0] border border-gray-300 text-[11px] rounded-xs font-mono focus:outline-none focus:border-[#d4af37]"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Back Image Box */}
+                          <div className="p-3 bg-white border border-[#e0e0e0] rounded-xs space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-[11px] text-gray-800 uppercase tracking-wider">
+                                Back Visual (Hover / Detail)
+                              </span>
+                              {formBackImage && (
+                                <button
+                                  type="button"
+                                  onClick={() => setFormBackImage('')}
+                                  className="text-[10px] text-rose-600 hover:underline cursor-pointer"
+                                >
+                                  Remove
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Preview Frame */}
+                            <div className="aspect-[4/5] bg-[#F1EFE9] border border-gray-200 rounded-xs flex items-center justify-center overflow-hidden relative">
+                              {formBackImage ? (
+                                <img
+                                  src={toStudioImage(formBackImage)}
+                                  alt="Back Visual Preview"
+                                  className="w-full h-full object-contain p-2"
+                                  onError={(e) => {
+                                    const original = getOriginalImageUrl(formBackImage);
+                                    if (e.currentTarget.src !== original) {
+                                      console.warn('[OFFS1DE] Admin form back preview studio image failed to load, falling back to original:', e.currentTarget.src);
+                                      e.currentTarget.src = original;
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <div className="text-center text-gray-400 p-4">
+                                  <ImageIcon size={28} className="mx-auto mb-1 opacity-60" />
+                                  <span className="text-[10px] block">No back image uploaded</span>
+                                </div>
+                              )}
+
+                              {/* Progress Overlay */}
+                              {uploadingBack && (
+                                <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center text-white p-4">
+                                  <Loader2 size={24} className="animate-spin text-[#d4af37] mb-2" />
+                                  <span className="text-xs font-mono font-bold mb-1">
+                                    Uploading... {uploadProgressBack}%
+                                  </span>
+                                  <div className="w-full bg-neutral-800 rounded-full h-2 overflow-hidden">
+                                    <div
+                                      className="bg-[#d4af37] h-full transition-all duration-150"
+                                      style={{ width: `${uploadProgressBack}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Upload Button */}
+                            <button
+                              type="button"
+                              disabled={uploadingBack}
+                              onClick={() => backInputRef.current?.click()}
+                              className="w-full py-2 bg-[#f0f0f0] hover:bg-[#d4af37] hover:text-black text-gray-800 font-bold text-[10.5px] uppercase tracking-wider rounded-xs cursor-pointer transition-colors flex items-center justify-center gap-1.5 border border-gray-300 disabled:opacity-50"
+                            >
+                              <Upload size={12} />
+                              <span>{uploadingBack ? 'Uploading Back...' : 'Upload Back Image'}</span>
+                            </button>
+
+                            {/* Manual URL Input */}
+                            <div>
+                              <span className="block text-[10px] text-gray-500 mb-0.5">Or paste direct URL:</span>
+                              <input
+                                type="url"
+                                placeholder="https://res.cloudinary.com/... or /products/..."
+                                value={formBackImage}
+                                onChange={(e) => setFormBackImage(e.target.value)}
+                                className="w-full px-2.5 py-1.5 bg-[#f0f0f0] border border-gray-300 text-[11px] rounded-xs font-mono focus:outline-none focus:border-[#d4af37]"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Modal Footer Actions */}
+                      <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
                         <button
-                          onClick={() => onToggleProductStock && onToggleProductStock(String(p.id))}
-                          className={`px-3.5 py-1.5 text-[10px] uppercase font-bold tracking-wider rounded-xs cursor-pointer transition-colors border ${
-                            p.inStock
-                              ? 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200'
-                              : 'bg-red-100 text-red-900 border-red-300 hover:bg-red-200'
-                          }`}
+                          type="button"
+                          onClick={() => {
+                            setIsProductFormOpen(false);
+                            setEditingProduct(null);
+                          }}
+                          className="px-5 py-2.5 bg-transparent hover:bg-gray-100 text-gray-700 border border-gray-300 font-bold text-xs uppercase tracking-wider rounded-xs cursor-pointer transition-colors"
                         >
-                          {p.inStock ? 'In Stock' : 'Sold Out'}
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isSavingProduct}
+                          className="inline-flex items-center gap-2 px-7 py-2.5 bg-[#d4af37] hover:bg-[#c29f2d] text-[#1a1a1a] font-bold text-xs uppercase tracking-wider rounded-xs cursor-pointer transition-colors shadow-sm disabled:opacity-50"
+                        >
+                          {isSavingProduct && <Loader2 size={14} className="animate-spin" />}
+                          <span>{editingProduct ? 'Save Jersey Changes' : 'Create Jersey Drop'}</span>
                         </button>
                       </div>
-                    ))}
+                    </form>
                   </div>
                 </div>
               )}
